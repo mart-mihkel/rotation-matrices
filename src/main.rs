@@ -15,8 +15,6 @@ const REVOLUTION_RADIUS: f32 = 15.;
 const OBJECT_DISTANCE: f32 = CROSS_SECTION_RADIUS + REVOLUTION_RADIUS + 5.;
 const PROJECTION_DISTANCE: f32 = SCREEN_WIDTH as f32 * OBJECT_DISTANCE * 3. / (8. * (CROSS_SECTION_RADIUS * REVOLUTION_RADIUS));
 
-const VERTEX_COUNT: u32 = 2_u32.pow(12);
-
 fn main() {
     let mut window = RenderWindow::new(
         (SCREEN_WIDTH, SCREEN_HEIGHT),
@@ -27,9 +25,9 @@ fn main() {
 
     window.set_framerate_limit(60);
 
-    let mut vertices = [Vertex::default(); VERTEX_COUNT as usize];
+    let mut vertices = [Vertex::default(); 2_usize.pow(12)];
 
-    let (mut y_rotation_angle, mut z_rotation_angle): (f32, f32) = (0.0, 0.0);
+    let (mut y_rotation_angle, mut z_rotation_angle): (f32, f32) = (0., 0.);
     while window.is_open() {
         // event loop
         while let Some(event) = window.poll_event() {
@@ -54,12 +52,12 @@ fn main() {
 
         // solid loop
         let mut vertex_i = 0;
-        let mut solid_angle = 0.0;
+        let mut solid_angle = 0.;
         while solid_angle < TAU {
             let (solid_sin, solid_cos) = solid_angle.sin_cos();
 
             // revolution loop
-            let mut revolution_angle = 0.0;
+            let mut revolution_angle = 0.;
             while revolution_angle < TAU {
                 let (revolution_sin, revolution_cos) = revolution_angle.sin_cos();
 
