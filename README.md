@@ -1,9 +1,7 @@
-# spinning_solid_of_revolution
+# Spinning Solid of Revolution
 
-## Prerequisites
-
-[Rust SFML](https://github.com/jeremyletang/rust-sfml)
+Made using [Rust SFML](https://github.com/jeremyletang/rust-sfml)
 
 [Guide](https://www.a1k0n.net/2011/07/20/donut-math.html)
 
-![donut](media/donut.gif)
+![donut](assets/donut.gif)
