@@ -3,6 +3,8 @@ extern crate glium;
 
 mod teapot;
 
+use std::fs;
+use std::path::Path;
 use glium::{Depth, DepthTest, Display, DrawParameters, IndexBuffer, Program, Surface, VertexBuffer};
 use glium::glutin::ContextBuilder;
 use glium::glutin::dpi::LogicalSize;
@@ -19,44 +21,15 @@ fn main() {
     let cb = ContextBuilder::new();
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
+    // load teapot
     let positions = VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
     let normals = VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
     let indices = IndexBuffer::new(&display, PrimitiveType::TrianglesList, &teapot::INDICES).unwrap();
 
-    let vertex_shader_src = r#"
-        #version 150
-
-        in vec3 position;
-        in vec3 normal;
-
-        out vec3 v_normal;
-
-        uniform mat4 roll;
-        uniform mat4 pitch;
-        uniform mat4 yaw;
-
-        void main() {
-            mat4 matrix = roll * pitch * yaw;
-            v_normal = transpose(inverse(mat3(matrix))) * normal;
-            gl_Position = matrix * vec4(position, 100.0);
-        }
-    "#;
-    let fragment_shader_src = r#"
-        # version 140
-
-        in vec3 v_normal;
-        out vec4 color;
-        uniform vec3 u_light;
-
-        void main() {
-            float brightness = dot(normalize(v_normal), normalize(u_light));
-            vec3 dark_color = vec3(0.0, 0.5, 0.0);
-            vec3 regular_color = vec3(0.0, 1.0, 0.0);
-            color = vec4(mix(dark_color, regular_color, brightness), 1.0);
-        }
-    "#;
-
-    let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+    // load shaders
+    let vertex_shader = fs::read_to_string(Path::new("src/shader/shader.vert")).unwrap();
+    let fragment_shader = fs::read_to_string(Path::new("src/shader/shader.frag")).unwrap();
+    let program = Program::from_source(&display, &vertex_shader, &fragment_shader, None).unwrap();
 
     // rotation angles
     let mut alpha = 0.0f32;
