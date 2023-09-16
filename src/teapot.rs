@@ -1,3 +1,3 @@
 mod teapot;
 
-pub use teapot::Vertex;
+pub use teapot::{VERTICES, NORMALS, INDICES};
