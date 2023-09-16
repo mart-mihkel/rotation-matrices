@@ -1,83 +1,139 @@
-use std::f32::consts::TAU;
-use sfml::graphics::{RenderWindow, Color, RenderTarget, PrimitiveType, Vertex, RenderStates};
-use sfml::system::{Vector2f, Vector2u};
-use sfml::window::{Style, Event, Key, VideoMode};
+#[macro_use]
+extern crate glium;
+
+mod teapot;
+
+use glium::{Depth, DepthTest, Display, DrawParameters, IndexBuffer, Program, Surface, VertexBuffer};
+use glium::glutin::ContextBuilder;
+use glium::glutin::dpi::LogicalSize;
+use glium::glutin::event::{Event, VirtualKeyCode, WindowEvent};
+use glium::glutin::event_loop::EventLoop;
+use glium::glutin::window::WindowBuilder;
+use glium::index::PrimitiveType;
 
 fn main() {
-    let window_size = Vector2u::new(1920, 1080);
-    let window_size_f: Vector2f = window_size.as_other();
-    let mut window = RenderWindow::new(
-        VideoMode::new(window_size.x, window_size.y, 24),
-        "Spinning thing",
-        Style::FULLSCREEN,
-        &Default::default(),
-    );
+    let event_loop = EventLoop::new();
+    let wb = WindowBuilder::new()
+        .with_inner_size(LogicalSize::new(800.0, 800.0))
+        .with_title("Rotation matrices");
+    let cb = ContextBuilder::new();
+    let display = Display::new(wb, cb, &event_loop).unwrap();
 
-    window.set_framerate_limit(60);
-    window.set_mouse_cursor_visible(false);
+    let positions = VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
+    let normals = VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
+    let indices = IndexBuffer::new(&display, PrimitiveType::TrianglesList, &teapot::INDICES).unwrap();
 
-    let mut vertices = vec![Vertex::with_pos_color(Vector2f::default(), Color::WHITE); 2_usize.pow(12)];
-    let mut yaw: f32 = 0.0;
-    let mut roll: f32 = 0.0;
-    let mut pitch: f32 = 0.0;
+    let vertex_shader_src = r#"
+        #version 150
 
-    while window.is_open() {
-        // event loop
-        while let Some(event) = window.poll_event() {
-            match event {
-                Event::Closed | Event::KeyPressed { code: Key::Escape, .. } => window.close(),
-                _ => {}
-            }
+        in vec3 position;
+        in vec3 normal;
+
+        out vec3 v_normal;
+
+        uniform mat4 roll;
+        uniform mat4 pitch;
+        uniform mat4 yaw;
+
+        void main() {
+            mat4 matrix = roll * pitch * yaw;
+            v_normal = transpose(inverse(mat3(matrix))) * normal;
+            gl_Position = matrix * vec4(position, 100.0);
         }
+    "#;
+    let fragment_shader_src = r#"
+        # version 140
 
-        // iterate over all knots
-        let mut i = 0;
-        let mut knot: f32 = 0.0;
-        while knot <= 1.0 {
+        in vec3 v_normal;
+        out vec4 color;
+        uniform vec3 u_light;
 
-            // roll around the x-axis and apply the current pitch and yaw
-            while roll < TAU {
-                let (yaw_s, yaw_c) = yaw.sin_cos();
-                let (roll_s, roll_c) = roll.sin_cos();
-                let (pitch_s, pitch_c) = pitch.sin_cos();
-
-                let f_knot = curve_f(knot);
-
-                // multiply all the rotation matrices and the coordinate column of the current knot
-                let x = knot * pitch_c * yaw_c + f_knot * (roll_s * pitch_s * yaw_c - roll_c * yaw_s);
-                let y = knot * pitch_c * yaw_s + f_knot * (roll_s * pitch_s * yaw_s + roll_c * yaw_c);
-                let z = knot * -pitch_s + f_knot * roll_s * pitch_c;
-
-                // project points onto a screen on the z-axis
-                let object_distance = 2.5;
-                let screen_distance = window_size_f.x * object_distance * 0.04;
-
-                vertices[i].position.x = window_size_f.x * 0.5 + x * screen_distance / (z + object_distance);
-                vertices[i].position.y = window_size_f.y * 0.5 - y * screen_distance / (z + object_distance);
-
-                i += 1;
-
-                roll += 0.05;
-            }
-            roll = 0.0;
-
-            knot += 0.05;
+        void main() {
+            float brightness = dot(normalize(v_normal), normalize(u_light));
+            vec3 dark_color = vec3(0.0, 0.5, 0.0);
+            vec3 regular_color = vec3(0.0, 1.0, 0.0);
+            color = vec4(mix(dark_color, regular_color, brightness), 1.0);
         }
+    "#;
 
-         yaw += 0.02;
-         pitch += 0.03;
+    let program = Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-        // rendering
-        window.clear(Color::BLACK);
-        window.draw_primitives(
-            &vertices[..i],
-            PrimitiveType::POINTS,
-            &RenderStates::DEFAULT,
-        );
-        window.display();
-    }
-}
+    // rotation angles
+    let mut alpha = 0.0f32;
+    let mut beta = 0.0f32;
+    let mut gamma = 0.0f32;
 
-fn curve_f(knot: f32) -> f32 {
-    -6.66667 * knot.powi(4) + 5.66667 * knot.powi(2) + 1.0
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::WindowEvent { event, .. } => {
+                match event {
+                    WindowEvent::CloseRequested => control_flow.set_exit(),
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        if let Some(key) = input.virtual_keycode {
+                            match key {
+                                VirtualKeyCode::Escape => control_flow.set_exit(),
+                                VirtualKeyCode::Left => beta += 0.05,
+                                VirtualKeyCode::Right => beta -= 0.05,
+                                VirtualKeyCode::Up => alpha += 0.05,
+                                VirtualKeyCode::Down => alpha -= 0.05,
+                                VirtualKeyCode::L => gamma += 0.05,
+                                VirtualKeyCode::R => gamma -= 0.05,
+                                _ => ()
+                            }
+                            display.gl_window().window().request_redraw();
+                        }
+                    }
+                    _ => ()
+                }
+            }
+            Event::RedrawRequested(_) => {
+                // rotation matrices
+                let roll = [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, alpha.cos(), alpha.sin(), 0.0],
+                    [0.0, -alpha.sin(), alpha.cos(), 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ];
+
+                let pitch = [
+                    [beta.cos(), 0.0, -beta.sin(), 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [beta.sin(), 0.0, beta.cos(), 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ];
+
+                let yaw = [
+                    [gamma.cos(), gamma.sin(), 0.0, 0.0],
+                    [-gamma.sin(), gamma.cos(), 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ];
+
+                // light direction
+                let light = [-1.0, 0.4, -0.1f32];
+
+                // rendering
+                let params = DrawParameters {
+                    depth: Depth {
+                        test: DepthTest::IfLess,
+                        write: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+
+                let mut target = display.draw();
+                target.clear_color_and_depth((1.0, 1.0, 1.0, 1.0), 1.0);
+                target.draw(
+                    (&positions, &normals),
+                    &indices,
+                    &program,
+                    &uniform! { roll: roll, pitch: pitch, yaw: yaw , u_light: light},
+                    &params,
+                ).unwrap();
+                target.finish().unwrap();
+            }
+            _ => ()
+        }
+    });
 }
